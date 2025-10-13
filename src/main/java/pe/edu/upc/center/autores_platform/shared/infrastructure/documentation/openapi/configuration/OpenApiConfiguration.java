@@ -21,7 +21,7 @@ public class OpenApiConfiguration {
                 .url("https://springdoc.org")))
         .externalDocs(new ExternalDocumentation()
             .description("Authors Platform Documentation")
-            .url("https://github.com/juanvaldez/autores-platform"));
+            .url("https://github.com/Miguel26112001/Authors-Platform"));
     return openApi;
   }
 }
