@@ -1,6 +1,7 @@
 package pe.edu.upc.center.autores_platform.authoring.application.internal.commandservices;
 
 import org.springframework.stereotype.Service;
+import pe.edu.upc.center.autores_platform.authoring.application.clients.ProfileServiceClient;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.CreateAuthorCommand;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
@@ -14,13 +15,21 @@ import java.util.Optional;
 @Service
 public class AuthorCommandServiceImpl implements AuthorCommandService {
   private final AuthorRepository authorRepository;
+  private final ProfileServiceClient profileServiceClient;
 
-  public AuthorCommandServiceImpl(AuthorRepository authorRepository) {
+  public AuthorCommandServiceImpl(AuthorRepository authorRepository, ProfileServiceClient profileServiceClient) {
     this.authorRepository = authorRepository;
+    this.profileServiceClient = profileServiceClient;
   }
 
   @Override
   public Long handle(CreateAuthorCommand command) {
+    // 1. **VERIFICACIÓN DE MICROSERVICIO**
+    if (!profileServiceClient.doesProfileExist(command.profileId())) {
+      // Si el Profile no existe, abortamos la creación
+      return null; // o lanza una excepción específica de dominio
+    }
+
     ProfileId profileId = new ProfileId(command.profileId());
 
     Author author = new Author(
