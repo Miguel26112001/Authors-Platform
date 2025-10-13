@@ -3,7 +3,7 @@ package pe.edu.upc.center.autores_platform.authoring.domain.services;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAllAuthorsQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByIdQuery;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetByProfileIdQuery;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByProfileIdQuery;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,5 +14,5 @@ public interface AuthorQueryService {
 
   Optional<Author> handle(GetAuthorByIdQuery query);
 
-  Optional<Author> handle(GetByProfileIdQuery query);
+  Optional<Author> handle(GetAuthorByProfileIdQuery query);
 }

@@ -4,7 +4,7 @@ import org.springframework.stereotype.Service;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAllAuthorsQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByIdQuery;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetByProfileIdQuery;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByProfileIdQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.valueobjects.ProfileId;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorQueryService;
 import pe.edu.upc.center.autores_platform.authoring.infrastructure.persistence.jpa.repositories.AuthorRepository;
@@ -31,7 +31,7 @@ public class AuthorQueryServiceImpl implements AuthorQueryService {
   }
 
   @Override
-  public Optional<Author> handle(GetByProfileIdQuery query) {
+  public Optional<Author> handle(GetAuthorByProfileIdQuery query) {
     ProfileId profileId = new ProfileId(query.profileId());
     return authorRepository.findByProfileId(profileId);
   }

@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAllAuthorsQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByIdQuery;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetByProfileIdQuery;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByProfileIdQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorCommandService;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorQueryService;
 import pe.edu.upc.center.autores_platform.authoring.interfaces.rest.resources.AuthorResource;
@@ -92,7 +92,7 @@ public class AuthorsController {
   public ResponseEntity<AuthorResource> getAuthorByProfileId(
       @PathVariable Long profileId
   ) {
-    var getAuthorByIdQuery = new GetByProfileIdQuery(profileId);
+    var getAuthorByIdQuery = new GetAuthorByProfileIdQuery(profileId);
     var author = authorQueryService.handle(getAuthorByIdQuery);
 
     if (author.isEmpty()){
