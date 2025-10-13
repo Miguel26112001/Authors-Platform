@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAllAuthorsQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByIdQuery;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetByProfileIdQuery;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorCommandService;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorQueryService;
 import pe.edu.upc.center.autores_platform.authoring.interfaces.rest.resources.AuthorResource;
@@ -65,16 +66,16 @@ public class AuthorsController {
       @PathVariable Long id
   ) {
     var getAuthorByIdQuery = new GetAuthorByIdQuery(id);
-    var course = authorQueryService.handle(getAuthorByIdQuery);
+    var author = authorQueryService.handle(getAuthorByIdQuery);
 
-    if (course.isEmpty()){
+    if (author.isEmpty()){
       return ResponseEntity.notFound().build();
     }
 
-    var courseResource = AuthorResourceFromEntityAssembler
-        .toResourceFromEntity(course.get());
+    var authorResource = AuthorResourceFromEntityAssembler
+        .toResourceFromEntity(author.get());
 
-    return ResponseEntity.ok(courseResource);
+    return ResponseEntity.ok(authorResource);
   }
 
   @GetMapping
@@ -87,8 +88,25 @@ public class AuthorsController {
     return ResponseEntity.ok(authorResources);
   }
 
+  @GetMapping("/profile/{profileId}")
+  public ResponseEntity<AuthorResource> getAuthorByProfileId(
+      @PathVariable Long profileId
+  ) {
+    var getAuthorByIdQuery = new GetByProfileIdQuery(profileId);
+    var author = authorQueryService.handle(getAuthorByIdQuery);
+
+    if (author.isEmpty()){
+      return ResponseEntity.notFound().build();
+    }
+
+    var authorResource = AuthorResourceFromEntityAssembler
+        .toResourceFromEntity(author.get());
+
+    return ResponseEntity.ok(authorResource);
+  }
+
   @PutMapping("/{id}")
-  public ResponseEntity<AuthorResource> updateCourse(
+  public ResponseEntity<AuthorResource> updateAuthor(
       @PathVariable Long id,
       @RequestBody UpdateAuthorResource updateAuthorResource
   ) {
