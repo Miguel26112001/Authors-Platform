@@ -3,6 +3,7 @@ package pe.edu.upc.center.autores_platform.authoring.application.internal.comman
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import pe.edu.upc.center.autores_platform.authoring.application.clients.ProfileServiceClient;
+import pe.edu.upc.center.autores_platform.authoring.application.clients.resources.ProfileResource;
 import pe.edu.upc.center.autores_platform.authoring.domain.exceptions.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.CreateAuthorCommand;
@@ -26,16 +27,15 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
 
   @Override
   public Long handle(CreateAuthorCommand command) {
-    // 1. **VERIFICACIÓN DE MICROSERVICIO**
-    try {
-      if (!profileServiceClient.doesProfileExist(command.profileId())) {
-        // Caso de negocio: El perfil no existe (Error 404, no es fallo de red)
-        throw new ProfileNotFoundException(command.profileId());
-      }
-    } catch (RestClientException e) {
-      throw new ExternalServiceUnavailableException("Profile Service", e.getMessage());
-
+    Optional<ProfileResource> profileResourceOptional;
+    // Usamos el nuevo método para obtener el DTO o Optional.empty()
+    profileResourceOptional = profileServiceClient.fetchProfileByProfileId(command.profileId());
+    if (profileResourceOptional.isEmpty()) {
+      // Caso de negocio: El perfil no existe (Error 404)
+      throw new ProfileNotFoundException(command.profileId());
     }
+
+    String authorEmail = profileResourceOptional.get().email(); // <-- INFO CLAVE
 
     ProfileId profileId = new ProfileId(command.profileId());
     if (authorRepository.existsByProfileId(profileId)) {
@@ -43,10 +43,11 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
       throw new ResourceAlreadyExistsException("Author", criteria);
     }
 
+    var bio = command.biography() + " - " + authorEmail;
     Author author = new Author(
         command.name(),
         command.nationality(),
-        command.biography(),
+        bio,
         profileId);
 
     try {
