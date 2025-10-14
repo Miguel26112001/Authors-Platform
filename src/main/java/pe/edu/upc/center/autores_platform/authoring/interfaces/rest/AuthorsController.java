@@ -4,10 +4,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pe.edu.upc.center.autores_platform.authoring.domain.exceptions.ResourceNotFoundException;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.*;
@@ -38,6 +42,17 @@ public class AuthorsController {
     this.authorQueryService = authorQueryService;
   }
 
+  // POST: CREATE AUTHOR
+  @Operation(summary = "Create an Author", description = "Creates a new Author profile.")
+  @ApiResponse(
+      responseCode = "201",
+      description = "Author created successfully",
+      content = @Content(mediaType = APPLICATION_JSON_VALUE, schema = @Schema(implementation = CreatedAuthorResource.class))
+  )
+  @ApiResponse(responseCode = "400", description = "Invalid input (e.g., ProfileId <= 0 or invalid request body).")
+  @ApiResponse(responseCode = "404", description = "Profile ID not found in the external service.") // <--- AÑADIDO: Maneja ProfileNotFoundException
+  @ApiResponse(responseCode = "409", description = "Author already exists for this Profile ID.") // <--- AÑADIDO: Maneja ResourceAlreadyExistsException
+
   @PostMapping()
   public ResponseEntity<CreatedAuthorResource> createAuthor(
       @RequestBody CreateAuthorResource createAuthorResource
@@ -45,42 +60,42 @@ public class AuthorsController {
     var createAuthorCommand = CreateAuthorCommandFromResourceAssembler
         .toCommandFromResource(createAuthorResource);
 
+    // Si hay un error (ej.: 409, 404), el servicio lanza una excepción que es capturada por el GlobalExceptionHandler.
     var authorId = authorCommandService.handle(createAuthorCommand);
 
-    if (authorId == null ) {
-      return ResponseEntity.badRequest().build();
-    }
-
+    // Después de una creación exitosa, garantizamos la búsqueda con orElseThrow
     var getAuthorByIdQuery = new GetAuthorByIdQuery(authorId);
-    var author = authorQueryService.handle(getAuthorByIdQuery);
-
-    if (author.isEmpty()) {
-      return ResponseEntity.badRequest().build();
-    }
+    var author = authorQueryService.handle(getAuthorByIdQuery)
+        .orElseThrow(() -> new ResourceNotFoundException("Author", authorId));
 
     var createdAuthorResource = CreatedAuthorResourceFromEntityAssembler
-        .toResourceFromEntity(author.get());
+        .toResourceFromEntity(author);
 
     return new ResponseEntity<>(createdAuthorResource, HttpStatus.CREATED);
   }
 
+  // GET: GET AUTHOR BY ID
+  @Operation(summary = "Get Author by ID", description = "Retrieves an Author profile by its internal ID.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Author found successfully",
+      content = @Content(mediaType = APPLICATION_JSON_VALUE, schema = @Schema(implementation = AuthorResource.class))
+  )
+  @ApiResponse(responseCode = "404", description = "Author not found")
   @GetMapping("/{id}")
   public ResponseEntity<AuthorResource> getAuthorById(
-      @PathVariable Long id
+      @Parameter(description = "Author's internal ID") @PathVariable Long id
   ) {
     var getAuthorByIdQuery = new GetAuthorByIdQuery(id);
-    var author = authorQueryService.handle(getAuthorByIdQuery);
-
-    if (author.isEmpty()){
-      return ResponseEntity.notFound().build();
-    }
+    var author = authorQueryService.handle(getAuthorByIdQuery).orElseThrow(() -> new ResourceNotFoundException("Author", id));
 
     var authorResource = AuthorResourceFromEntityAssembler
-        .toResourceFromEntity(author.get());
+        .toResourceFromEntity(author);
 
     return ResponseEntity.ok(authorResource);
   }
 
+  // GET: GET ALL AUTHORS WITH OPTIONAL FILTERS (Name and/or Nationality)
   @Operation(
       summary = "Get All Authors with Optional Filtering",
       description = "Retrieves a list of Authors. Can be optionally filtered by partial name and/or nationality."
@@ -88,17 +103,20 @@ public class AuthorsController {
   @Parameters({
       @Parameter(
           name = "name",
-          description = "Name or part of the name to filter by.",
-          required = false,
+          description = "Name or part of the name to filter by (partial, case-insensitive match).",
           in = ParameterIn.QUERY
       ),
       @Parameter(
           name = "nationality",
-          description = "Nationality to filter by.",
-          required = false,
+          description = "Nationality to filter by (partial, case-insensitive match).",
           in = ParameterIn.QUERY
       )
   })
+  @ApiResponse(
+      responseCode = "200",
+      description = "List of Authors retrieved successfully (can be empty)",
+      content = @Content(mediaType = APPLICATION_JSON_VALUE)
+  )
   @GetMapping
   public ResponseEntity<List<AuthorResource>> getAllAuthors(
       @RequestParam(name = "name", required = false) String name,
@@ -135,48 +153,68 @@ public class AuthorsController {
     return ResponseEntity.ok(authorResources);
   }
 
+  // GET: GET AUTHOR BY PROFILE ID
+  @Operation(summary = "Get Author by Profile ID", description = "Retrieves an Author profile using their associated unique Profile ID.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Author found successfully",
+      content = @Content(mediaType = APPLICATION_JSON_VALUE, schema = @Schema(implementation = AuthorResource.class))
+  )
+  @ApiResponse(responseCode = "404", description = "Author not found for the given Profile ID")
   @GetMapping("/profile/{profileId}")
   public ResponseEntity<AuthorResource> getAuthorByProfileId(
-      @PathVariable Long profileId
+      @Parameter(description = "The unique Profile ID associated with the author") @PathVariable Long profileId
   ) {
-    var getAuthorByIdQuery = new GetAuthorByProfileIdQuery(profileId);
-    var author = authorQueryService.handle(getAuthorByIdQuery);
+    try {
+      var getAuthorByProfileIdQuery = new GetAuthorByProfileIdQuery(profileId);
+      var author = authorQueryService.handle(getAuthorByProfileIdQuery)
+          .orElseThrow(() -> new ResourceNotFoundException("Author", "ProfileId " + profileId));
 
-    if (author.isEmpty()){
-      return ResponseEntity.notFound().build();
+      var authorResource = AuthorResourceFromEntityAssembler
+          .toResourceFromEntity(author);
+
+      return ResponseEntity.ok(authorResource);
+
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().build();
     }
-
-    var authorResource = AuthorResourceFromEntityAssembler
-        .toResourceFromEntity(author.get());
-
-    return ResponseEntity.ok(authorResource);
   }
 
+  // PUT: UPDATE AUTHOR
+  @Operation(summary = "Update an Author", description = "Updates the details of an existing Author profile.")
+  @ApiResponse(
+      responseCode = "200",
+      description = "Author updated successfully",
+      content = @Content(mediaType = APPLICATION_JSON_VALUE, schema = @Schema(implementation = AuthorResource.class))
+  )
+  @ApiResponse(responseCode = "400", description = "Invalid request or Author ID not found")
   @PutMapping("/{id}")
   public ResponseEntity<AuthorResource> updateAuthor(
-      @PathVariable Long id,
+      @Parameter(description = "Author's internal ID") @PathVariable Long id,
       @RequestBody UpdateAuthorResource updateAuthorResource
   ) {
     var updateAuthorCommand = UpdateAuthorCommandFromResourceAssembler
         .toCommandFromResource(id, updateAuthorResource);
-    var updatedAuthor = authorCommandService.handle(updateAuthorCommand);
+    // Si el Author no existe, el CommandService lanza una excepción (404)
+    var updatedAuthor = authorCommandService.handle(updateAuthorCommand)
+        .orElseThrow(() -> new ResourceNotFoundException("Author", id));
 
-    if (updatedAuthor.isEmpty()) {
-      return ResponseEntity.badRequest().build();
-    }
-
-    var authorResource = AuthorResourceFromEntityAssembler.toResourceFromEntity(updatedAuthor.get());
+    var authorResource = AuthorResourceFromEntityAssembler.toResourceFromEntity(updatedAuthor);
 
     return ResponseEntity.ok(authorResource);
   }
 
+  // DELETE: DELETE AUTHOR
+  @Operation(summary = "Delete an Author", description = "Deletes an Author profile by its internal ID.")
+  @ApiResponse(responseCode = "204", description = "Author deleted successfully (No Content)")
+  @ApiResponse(responseCode = "404", description = "Author ID not found")
   @DeleteMapping("/{id}")
   public ResponseEntity<?> deleteAuthor(
-      @PathVariable Long id)
+      @Parameter(description = "Author's internal ID") @PathVariable Long id)
   {
     var deleteAuthorCommand = new DeleteAuthorCommand(id);
     authorCommandService.handle(deleteAuthorCommand);
 
-    return ResponseEntity.ok("Author with given id was successfully deleted");
+    return ResponseEntity.noContent().build();
   }
 }

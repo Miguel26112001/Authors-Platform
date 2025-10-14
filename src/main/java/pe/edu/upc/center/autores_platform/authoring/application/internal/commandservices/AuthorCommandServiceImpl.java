@@ -1,7 +1,9 @@
 package pe.edu.upc.center.autores_platform.authoring.application.internal.commandservices;
 
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import pe.edu.upc.center.autores_platform.authoring.application.clients.ProfileServiceClient;
+import pe.edu.upc.center.autores_platform.authoring.domain.exceptions.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.CreateAuthorCommand;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
@@ -25,12 +27,21 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
   @Override
   public Long handle(CreateAuthorCommand command) {
     // 1. **VERIFICACIÓN DE MICROSERVICIO**
-    if (!profileServiceClient.doesProfileExist(command.profileId())) {
-      // Si el Profile no existe, abortamos la creación
-      return null; // o lanza una excepción específica de dominio
+    try {
+      if (!profileServiceClient.doesProfileExist(command.profileId())) {
+        // Caso de negocio: El perfil no existe (Error 404, no es fallo de red)
+        throw new ProfileNotFoundException(command.profileId());
+      }
+    } catch (RestClientException e) {
+      throw new ExternalServiceUnavailableException("Profile Service", e.getMessage());
+
     }
 
     ProfileId profileId = new ProfileId(command.profileId());
+    if (authorRepository.existsByProfileId(profileId)) {
+      String criteria = "ProfileId " + command.profileId();
+      throw new ResourceAlreadyExistsException("Author", criteria);
+    }
 
     Author author = new Author(
         command.name(),
@@ -38,7 +49,11 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
         command.biography(),
         profileId);
 
-    authorRepository.save(author);
+    try {
+      authorRepository.save(author);
+    } catch (Exception e) {
+      throw new CommandExecutionException("CreateAuthorCommand", e.getMessage());
+    }
 
     return author.getId();
   }
@@ -46,13 +61,13 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
   @Override
   public void handle(DeleteAuthorCommand command) {
     if (!authorRepository.existsById(command.authorId())) {
-      throw new IllegalArgumentException("Author with id " + command.authorId() + " don't exist");
+      throw new ResourceNotFoundException("Author", command.authorId());
     }
 
     try {
       authorRepository.deleteById(command.authorId());
     } catch (Exception e) {
-      throw new IllegalArgumentException("Error while deleting author: " + e.getMessage());
+      throw new CommandExecutionException("DeleteAuthorCommand", e.getMessage());
     }
   }
 
@@ -61,7 +76,7 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
     var author = authorRepository.findById(command.authorId());
 
     if (author.isEmpty()){
-      return Optional.empty();
+      throw new ResourceNotFoundException("Author", command.authorId());
     }
     var authorToUpdate = author.get();
 
@@ -73,7 +88,7 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
               command.biography()));
       return Optional.of(updatedAuthor);
     } catch (Exception e) {
-      throw new IllegalArgumentException("Error while updating course: " + e.getMessage());
+      throw new CommandExecutionException("UpdateAuthorCommand", e.getMessage());
     }
   }
 }

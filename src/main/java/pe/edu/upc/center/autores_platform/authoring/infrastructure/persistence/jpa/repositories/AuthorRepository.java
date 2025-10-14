@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AuthorRepository extends JpaRepository<Author, Long> {
+  boolean existsByProfileId(ProfileId profileId);
+
   Optional<Author> findByProfileId(ProfileId profileId);
   List<Author> findByNameContainingIgnoreCase(String name);
   List<Author> findByNationalityContainingIgnoreCase(String nationality);
