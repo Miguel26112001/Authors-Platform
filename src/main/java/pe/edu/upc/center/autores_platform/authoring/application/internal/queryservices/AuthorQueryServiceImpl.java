@@ -2,9 +2,7 @@ package pe.edu.upc.center.autores_platform.authoring.application.internal.querys
 
 import org.springframework.stereotype.Service;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAllAuthorsQuery;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByIdQuery;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.GetAuthorByProfileIdQuery;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.queries.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.valueobjects.ProfileId;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorQueryService;
 import pe.edu.upc.center.autores_platform.authoring.infrastructure.persistence.jpa.repositories.AuthorRepository;
@@ -34,5 +32,20 @@ public class AuthorQueryServiceImpl implements AuthorQueryService {
   public Optional<Author> handle(GetAuthorByProfileIdQuery query) {
     ProfileId profileId = new ProfileId(query.profileId());
     return authorRepository.findByProfileId(profileId);
+  }
+
+  @Override
+  public List<Author> handle(GetAuthorsByNameQuery query) {
+    return authorRepository.findByNameContainingIgnoreCase(query.name());
+  }
+
+  @Override
+  public List<Author> handle(GetAuthorsByNationalityQuery query) {
+    return authorRepository.findByNationalityContainingIgnoreCase(query.nationality());
+  }
+
+  @Override
+  public List<Author> handle(GetAuthorsByNameAndNationalityQuery query) {
+    return authorRepository.findByNameContainingIgnoreCaseAndNationalityContainingIgnoreCase(query.name(), query.nationality());
   }
 }

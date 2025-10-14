@@ -4,8 +4,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.valueobjects.ProfileId;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface AuthorRepository extends JpaRepository<Author, Long> {
   Optional<Author> findByProfileId(ProfileId profileId);
+  List<Author> findByNameContainingIgnoreCase(String name);
+  List<Author> findByNationalityContainingIgnoreCase(String nationality);
+  List<Author> findByNameContainingIgnoreCaseAndNationalityContainingIgnoreCase(String name, String nationality);
 }
