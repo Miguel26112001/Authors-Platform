@@ -12,17 +12,28 @@ public class RabbitMQConfig {
   public static final String QUEUE_NAME = "authors.profile-email-updates"; // Nombre de la cola de Authors
   public static final String ROUTING_KEY_EMAIL = "profile.email.updated"; // Clave que escucha Authors
 
+  public static final String ROUTING_KEY_PROFILE_DELETED = "profile.deleted"; // La clave que Profiles enviará
+  public static final String QUEUE_PROFILE_DELETED = "authors.profile-deleted"; // La nueva cola que recibirá el borrado
+
+  // Bean de cola para la actualización de EMAIL (ya existente)
   @Bean
   public Queue queue() {
     return new Queue(QUEUE_NAME, true); // durable: true
   }
 
+  // Bean de cola para la eliminación de PERFILES (NUEVO)
+  @Bean
+  public Queue profileDeletedQueue() {
+    return new Queue(QUEUE_PROFILE_DELETED, true);
+  }
+
+  // Bean de Exchange (ya existente)
   @Bean
   public TopicExchange exchange() {
     return new TopicExchange(EXCHANGE_NAME);
   }
 
-  // El Binding conecta la cola con el Exchange a través de la clave de enrutamiento
+  // Binding para la actualización de EMAIL (ya existente)
   @Bean
   public Binding binding(Queue queue, TopicExchange exchange) {
     return BindingBuilder.bind(queue)
@@ -30,6 +41,15 @@ public class RabbitMQConfig {
         .with(ROUTING_KEY_EMAIL); // Sólo los mensajes con esta clave irán a esta cola
   }
 
+  // Binding para la eliminación de PERFILES (NUEVO)
+  @Bean
+  public Binding profileDeletedBinding(Queue profileDeletedQueue, TopicExchange exchange) {
+    return BindingBuilder.bind(profileDeletedQueue)
+        .to(exchange)
+        .with(ROUTING_KEY_PROFILE_DELETED);
+  }
+
+  // Conversor JSON (ya existente)
   @Bean
   public MessageConverter jsonMessageConverter() {
     // Usa Jackson (la biblioteca de serialización por defecto de Spring) para convertir objetos a JSON y viceversa.

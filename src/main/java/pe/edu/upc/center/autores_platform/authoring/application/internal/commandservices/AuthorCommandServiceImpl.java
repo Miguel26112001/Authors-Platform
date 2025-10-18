@@ -1,15 +1,12 @@
 package pe.edu.upc.center.autores_platform.authoring.application.internal.commandservices;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
 import pe.edu.upc.center.autores_platform.authoring.application.clients.ProfileServiceClient;
 import pe.edu.upc.center.autores_platform.authoring.application.clients.resources.ProfileResource;
+import pe.edu.upc.center.autores_platform.authoring.application.internal.outboundservices.AuthorMessagingService;
 import pe.edu.upc.center.autores_platform.authoring.domain.exceptions.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.aggregates.Author;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.CreateAuthorCommand;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.DeleteAuthorCommand;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.UpdateAuthorBiographyByEmailCommand;
-import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.UpdateAuthorCommand;
+import pe.edu.upc.center.autores_platform.authoring.domain.model.commands.*;
 import pe.edu.upc.center.autores_platform.authoring.domain.model.valueobjects.ProfileId;
 import pe.edu.upc.center.autores_platform.authoring.domain.services.AuthorCommandService;
 import pe.edu.upc.center.autores_platform.authoring.infrastructure.persistence.jpa.repositories.AuthorRepository;
@@ -20,10 +17,15 @@ import java.util.Optional;
 public class AuthorCommandServiceImpl implements AuthorCommandService {
   private final AuthorRepository authorRepository;
   private final ProfileServiceClient profileServiceClient;
+  private final AuthorMessagingService authorMessagingService; // <-- Dependencia
 
-  public AuthorCommandServiceImpl(AuthorRepository authorRepository, ProfileServiceClient profileServiceClient) {
+  public AuthorCommandServiceImpl(
+      AuthorRepository authorRepository,
+      ProfileServiceClient profileServiceClient,
+      AuthorMessagingService authorMessagingService) {
     this.authorRepository = authorRepository;
     this.profileServiceClient = profileServiceClient;
+    this.authorMessagingService = authorMessagingService;
   }
 
   @Override
@@ -62,12 +64,22 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
 
   @Override
   public void handle(DeleteAuthorCommand command) {
-    if (!authorRepository.existsById(command.authorId())) {
-      throw new ResourceNotFoundException("Author", command.authorId());
-    }
+    // 1. Buscar el Autor para obtener su ProfileId
+    var author = authorRepository.findById(command.authorId())
+        .orElseThrow(() -> new ResourceNotFoundException("Author", command.authorId()));
+
+    // Obtenemos el ProfileId ANTES de borrar la entidad.
+    Long profileIdToDelete = author.getProfileId().profileId();
 
     try {
-      authorRepository.deleteById(command.authorId());
+      // 2. Eliminar el Author de la BD local
+      authorRepository.delete(author);
+      // NOTA: Usar 'delete(author)' es mejor que 'deleteById(id)' aquí,
+      // ya que obtuvimos el objeto en el paso 1.
+
+      // 3. Notificación Asíncrona a Profiles (El paso de la Saga)
+      // Enviamos el ProfileId para que el servicio Profiles sepa qué borrar.
+      authorMessagingService.sendAuthorDeletedEvent(profileIdToDelete);
     } catch (Exception e) {
       throw new CommandExecutionException("DeleteAuthorCommand", e.getMessage());
     }
@@ -132,6 +144,31 @@ public class AuthorCommandServiceImpl implements AuthorCommandService {
     } catch (Exception e) {
       // Fallo de infraestructura durante la actualización asíncrona
       throw new CommandExecutionException("UpdateAuthorBiographyByEmailCommand", e.getMessage());
+    }
+  }
+
+  @Override
+  public void handle(DeleteAuthorByProfileIdCommand command) {
+    // 1. Convertir ProfileId a Value Object
+    ProfileId profileId = new ProfileId(command.profileId());
+
+    // 2. Buscar al Author por ProfileId
+    var authorOptional = authorRepository.findByProfileId(profileId);
+    if (authorOptional.isEmpty()) {
+      // Importante en eventos: si el Author ya fue borrado o nunca existió, IGNORAMOS.
+      // No lanzamos un 404, simplemente terminamos la ejecución.
+      System.out.println("LOG: Author not found for Profile ID " + command.profileId() + ". Deletion event ignored.");
+      return;
+    }
+
+    var authorToDelete = authorOptional.get();
+
+    try {
+      // 3. Eliminar el autor localmente
+      authorRepository.delete(authorToDelete);
+    } catch (Exception e) {
+      // Fallo de persistencia durante la eliminación asíncrona
+      throw new CommandExecutionException("DeleteAuthorByProfileIdCommand", e.getMessage());
     }
   }
 }
